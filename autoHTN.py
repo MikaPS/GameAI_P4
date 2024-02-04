@@ -17,8 +17,18 @@ pyhop.declare_methods ('produce', produce)
 
 def make_method (name, rule):
 	def method (state, ID):
-		# your code here
-		pass
+		subtasks = []
+		
+		requires = rule.get('Requires', {})
+		for item, value in requires.items():
+			subtasks.append(('have_enough', ID, item, value))
+
+		consumes = rule.get('Consumes', {})
+		for item, value in consumes.items():
+			subtasks.append(('have_enough', ID, item, value))
+		
+		subtasks.append((name, ID))
+		return subtasks # a list
 
 	return method
 
@@ -28,18 +38,80 @@ def declare_methods (data):
 
 	# your code here
 	# hint: call make_method, then declare the method to pyhop using pyhop.declare_methods('foo', m1, m2, ..., mk)	
-	pass			
+	dict_of_all_methods = {}
+	recipes = data["Recipes"]
+	# sort recipes
+	
+	sorted_recipes = dict(sorted(recipes.items(), key=lambda x: x[1].get('Time', 1)))
+	# make methods
 
-def make_operator (rule):
-	def operator (state, ID):
-		# your code here
-		pass
+	#for name, rule in sorted_recipes:
+		#op_name = "op_" + name.replace(" ", "_")
+		#method_name = "produce_" + list(produces.keys())[0].replace(" ", "_")
+		#method = make_method(op_name, rule)
+		#pyhop.declare_methods(method_name, method)
+
+	
+	for name in sorted_recipes.keys():
+		# checks what's the method goal
+		produces = recipes[name].get('Produces', {})
+		method_name = "produce_" + list(produces.keys())[0].replace(" ", "_")
+
+		# name of related operator to pass to the make_method
+		op_name = "op_" + name.replace(" ", "_")
+		method = make_method(op_name, recipes[name])
+
+		# name of possible method that achieve it
+		single_method = name.replace(" ", "_")
+		method.__name__ = single_method
+		# have a dict with all possible ways to produce this item
+		if method_name not in dict_of_all_methods:
+			dict_of_all_methods[method_name] = [method]
+		else:
+			dict_of_all_methods[method_name].append(method)
+		pyhop.declare_methods(method_name, *dict_of_all_methods[method_name])
+	
+def make_operator(rule):
+	def operator(state, ID):
+        # Extract relevant information from the rule
+		produces = rule.get('Produces', {})
+		requires = rule.get('Requires', {})
+		consumes = rule.get('Consumes', {})
+		time_required = rule.get('Time', 1) #sets 1 as the default
+		
+		if state.time[ID] < time_required:
+			return False
+
+		for item, value in requires.items():
+			if getattr(state, item)[ID] < value:
+				return False
+			
+		for item, value in consumes.items():
+			if getattr(state, item)[ID] < value:
+        	# You don't have enough of this item, handle accordingly
+				return False
+			else:
+				getattr(state, item)[ID] -= value
+		
+		state.time[ID] -= time_required
+		for item, value in produces.items():
+			getattr(state, item)[ID] += value
+		
+		return state
 	return operator
 
 def declare_operators (data):
 	# your code here
 	# hint: call make_operator, then declare the operator to pyhop using pyhop.declare_operators(o1, o2, ..., ok)
-	pass
+	list_of_all_operators = []
+	recipes = data["Recipes"]
+	for name in recipes.keys():
+		op_name = "op_" + name.replace(" ", "_")
+		op = make_operator(recipes[name])
+		op.__name__ = op_name
+		list_of_all_operators.append(op)
+	pyhop.declare_operators(*list_of_all_operators)
+
 
 def add_heuristic (data, ID):
 	# prune search branch if heuristic() returns True
@@ -80,17 +152,18 @@ if __name__ == '__main__':
 	with open(rules_filename) as f:
 		data = json.load(f)
 
-	state = set_up_state(data, 'agent', time=239) # allot time here
+	state = set_up_state(data, 'agent', time=46) # allot time here
 	goals = set_up_goals(data, 'agent')
 
 	declare_operators(data)
 	declare_methods(data)
 	add_heuristic(data, 'agent')
 
-	# pyhop.print_operators()
-	# pyhop.print_methods()
+	pyhop.print_operators()
+	pyhop.print_methods()
 
 	# Hint: verbose output can take a long time even if the solution is correct; 
 	# try verbose=1 if it is taking too long
-	pyhop.pyhop(state, goals, verbose=3)
+	pyhop.pyhop(state, [('have_enough', 'agent', 'wood', 12)], verbose=3)
+	# pyhop.pyhop(state, goals, verbose=3)
 	# pyhop.pyhop(state, [('have_enough', 'agent', 'cart', 1),('have_enough', 'agent', 'rail', 20)], verbose=3)
