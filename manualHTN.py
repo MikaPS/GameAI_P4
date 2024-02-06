@@ -406,11 +406,9 @@ state.made_bench = {'agent': False}
 state.plank = {'agent': 0}
 state.stick = {'agent': 0}
 
-
 # your code here 
 
 # pyhop.print_operators()
 # pyhop.print_methods()
 
-# pyhop.pyhop(state, [('have_enough', 'agent', 'wood', 1)], verbose=3)
 pyhop.pyhop(state, [('have_enough', 'agent', 'wood', 12)], verbose=3)
