@@ -2,8 +2,6 @@ import pyhop
 import json
 
 def check_enough (state, ID, item, num):
-	# print("\n check enough?", item, " ", num)
-
 	if getattr(state,item)[ID] >= num: return []
 	return False
 
@@ -12,10 +10,31 @@ def produce_enough (state, ID, item, num):
 
 pyhop.declare_methods ('have_enough', check_enough, produce_enough)
 
+
 def produce (state, ID, item):
 	return [('produce_{}'.format(item), ID)]
 
 pyhop.declare_methods ('produce', produce)
+
+def insert_prereq(state, rule, ID):
+	subtasks = []
+
+	# requires = rule.get('Requires', {})
+	# for item, value in requires.items():
+	# 	# if getattr(state, item)[ID] < value:
+	# 	subtasks.append(('have_enough', ID, item, value))
+
+	consumes = rule.get('Consumes', {})	
+	for item, value in reversed(list(consumes.items())):
+		# if getattr(state, item)[ID] < value:
+		subtasks.append(('have_enough', ID, item, value))
+	print("\nsubtasks in insert prerqe: ", subtasks, "\n")
+
+	return subtasks # a list
+
+	# if we are missing a dependency, add it to the list
+	# adjusts the plan by task decomposition
+pyhop.declare_methods ('insert_prereq', insert_prereq)
 
 def make_method (name, rule):
 	def method (state, ID):
@@ -25,16 +44,11 @@ def make_method (name, rule):
 		for item, value in requires.items():
 			subtasks.append(('have_enough', ID, item, value))
 
-		consumes = rule.get('Consumes', {})
-		if name == "op_craft_wooden_axe_at_bench":
-			print("consumes: ", consumes)
-
-		for item, value in consumes.items():
+		consumes = rule.get('Consumes', {})	
+		for item, value in reversed(list(consumes.items())):
 			subtasks.append(('have_enough', ID, item, value))
-		
+		subtasks.append(('insert_prereq', rule, ID))
 		subtasks.append((name, ID))
-		if name == "op_craft_wooden_axe_at_bench":
-			print("subtasks: ", subtasks)
 		return subtasks # a list
 
 	return method
@@ -53,7 +67,18 @@ def declare_methods (data):
 	recipes = data["Recipes"]
 	# sort recipes
 	# Sort recipes based on time, faster recipes first	
-	sorted_recipes = dict(sorted(recipes.items(), key=lambda x: x[1].get('Time', 1)))
+	# def custom_sort(item):
+	# 	time = item[1]["Time"]
+	# 	reverse_time = -time  # Reverse time
+	# 	name = item[0]
+	# 	return (reverse_time, name[::-1])  # Reverse the name for alphabetical reverse order
+
+	# # Sort the recipes using the custom sorting function
+	# sorted_recipes = dict(sorted(recipes.items(), key=custom_sort))
+	sorted_recipes = dict(sorted(recipes.items(), key=lambda x: x[1].get('Time', 1), reverse=True))
+
+
+	print(sorted_recipes)
 	#the way we sort the recipes is 
 	
 	# make methods
@@ -80,7 +105,7 @@ def declare_methods (data):
 		
 		#find out the ways to produce woods, dict_of_all_methods,
 		#iterate through dict_of_all_methods
-	print("dict of all methods: ", dict_of_all_methods["produce_wooden_axe"])
+	# print("dict of all methods: ", dict_of_all_methods["produce_wooden_axe"])
 	for method_name in dict_of_all_methods.keys():
 		#going through, produce wood, give it all the ways and then declare, 2 ways of producing wood, axe or punching, first for loop looking at ways
 		#don't want to declare one for each, declare through method_name, not recipe
@@ -142,15 +167,12 @@ def add_heuristic (data, ID):
 		#list of subtasks connecting to the curr_task
 		#if the curr_task has been seen at the same or lower depth, cut		
 		# check if we got enough of original item
-		# if len(calling_stack) > 0:
-		# 	# first item on calling_stack is the main goal
-		# 	og_goal_item = calling_stack[0][2]
-		# 	og_goal_value = calling_stack[0][3]
-		# 	print("current state of item: ", getattr(state, og_goal_item)[ID])
-		# 	# if rn we have more of the item that we need -> need to finish the loop
-		# 	if getattr(state, og_goal_item)[ID] >= og_goal_value:
-		# 		print("have enough!")
-		# 		return True
+
+		# print("\n\nCalling stack:\n", calling_stack, "\n")
+		# print("Tasks:\n", tasks, "\n\n")
+		# print("plan: ", plan)
+		# print("curr_task: ", curr_task)
+
 
 		if curr_task in calling_stack:
 			#happens when creating tools, don't need tools more then once
@@ -163,22 +185,200 @@ def add_heuristic (data, ID):
    				"stone_pickaxe",
    				"wooden_axe",
    				"wooden_pickaxe"
- 				]			
+ 				]		
+			# pickaxes = ["iron_pickaxe", "stone_pickaxe", "wooden_pickaxe"]
+			# axes = ["iron_axe", "stone_axe", "wooden_axe"]
 			
+			# if len(curr_task) >= 3 and curr_task[2] in tools and curr_task[0] in ["produce"]:
+			# 	if curr_task[2] == "stone_axe":
+			# 		# already have wooden axe and plan to make iron axe
+			# 		if getattr(state, "wooden_axe")[ID] >= 1:
+			# 			for task in calling_stack:
+			# 				if len(task) >= 3 and task[2] in axes:
+			# 					print("elimnating: ", curr_task[2], " because of axes")
+			# 					return True
+			# 	if curr_task[2] == "stone_pickaxe":
+			# 		# already have wooden axe and plan to make iron axe
+			# 		if getattr(state, "wooden_pickaxe")[ID] >= 1:
+			# 			for task in calling_stack:
+			# 				if len(task) >= 3 and task[2] in pickaxes:
+			# 					print("elimnating: ", curr_task[2], " because of pickaxes")
+			# 					return True
+
+
 			if len(curr_task) >= 3 and curr_task[2] in tools and curr_task[0] in ["produce"]:
 				if getattr(state, curr_task[2])[ID] >= 1:
+						# tasks.remove(curr_task)
 						print("\n\nNEW Current Task eliminated: ", curr_task[2])
 						return True
-				
+								
 			if len(curr_task) >= 3 and curr_task[2] in tools and curr_task[0] in ["have_enough", "produce"]:
-				# print("\n\n\ntesting getattribute: ", getattr(state, curr_task[2])[ID], " curr task: ", curr_task, " curr task[2] ", curr_task[2], "\n\n")
-				# if we already made a tool -> break
-				
+				# if we already made a tool -> break				
 				# if we need the current tool to create the tool in the future (need wooden axe to get wood to make a wooden axe) -> break
 				for task in tasks[1:]:
-					if len(task) >= 3 and curr_task[2] == task[2] and task[0] == "have_enough":
+					if len(task) >= 3 and curr_task[2] == task[2]:
+						tasks.remove(task)
+
 						print("\n\nCurrent Task eliminated: ", curr_task[2])
 						return True
+			
+			# print("current task: ", curr_task)
+			# pyhop.print_state(state)
+			# if len(curr_task) >= 3 and curr_task[0] in ["produce"]:
+			# 	item = curr_task[2]
+			# 	recipes = data["Recipes"]
+			# 	r_name = ""
+			# 	print("currently looking at this item: ", item)
+			# 	for name in recipes:
+			# 		split_name = name.split(" ")
+			# 		# print(split_name)
+			# 		if "craft" in split_name[0] and item == split_name[1]:
+			# 			r_name = name
+			# 	if r_name != "":
+			# 		for r in recipes[r_name]["Consumes"]:
+			# 			print("r is ", r)
+			# 			tasks.insert(0, ('have_enough', ID, r, recipes[r_name]["Consumes"][r]))
+			# 			print("ME ADDING TASK:", tasks)					
+			
+
+			##### current mission
+			# dict_completed_items = {}						
+			# recipes = data["Recipes"]
+			# # dict_completed_items = {}
+			# for task in plan:
+			# 	print("Task in plan: ", task)
+			# 	new_name = task[0][3:].replace("_", " ")
+			# 	for name in recipes:
+			# 		if new_name == name:
+			# 			produces = recipes[new_name]["Produces"]
+			# 			for k, v in produces.items():
+			# 				if k not in dict_completed_items:
+			# 					dict_completed_items[k] = v
+			# 				else:
+			# 					dict_completed_items[k] = dict_completed_items[k] + v
+			
+			# for task in tasks:
+			# 	if len(task) > 3:
+			# 		if task[2] not in dict_completed_items:
+			# 			dict_completed_items[task[2]] = task[3]
+			# 		else:
+			# 			dict_completed_items[task[2]] = dict_completed_items[task[2]] + task[3]
+			
+			# if (len(curr_task) > 3):
+			# 	dict_completed_items[curr_task[2]] = dict_completed_items[curr_task[2]] + curr_task[3]
+			
+			# dict_of_reserved_items = {}
+			# for task in calling_stack:
+			# 	if task not in plan:
+			# 		if len(task) > 3 and task[2] not in tools:
+			# 			if task[2] not in dict_of_reserved_items:
+			# 				dict_of_reserved_items[task[2]] = task[3]
+			# 			else:
+			# 				dict_of_reserved_items[task[2]] = dict_of_reserved_items[task[2]] + task[3]	
+			
+			# print("\n\nreserved (calling stack): ", dict_of_reserved_items.items(),"\n")
+			# print("completed items (plan): ", dict_completed_items.items(),"\n\n")
+
+			# for item in dict_of_reserved_items:
+			# 	print("item: ", item, dict_completed_items.get(item,0),  " < ", dict_of_reserved_items.get(item,0),)
+			# 	if dict_completed_items.get(item,0) < dict_of_reserved_items.get(item,0):
+			# 		return True
+			##########
+			
+			# recipes = data["Recipes"]
+			# r_name = ""
+			# total_time = 0
+			# for task in tasks:
+			# 	print("task in loop: ", task)
+			# 	if task[0] not in ["have_enough"]:
+			# 		total_time += 1
+			# 		print("time:", total_time, task)
+			# if total_time > 100:
+			# 	True
+					
+			# if state.stone_pickaxe[ID] >= 1 and depth > 350:
+			# 	return True
+			
+			# count the total number of items we will get in the future
+			# dict_of_needed_items = {}
+			# for task in tasks:
+			# 	if len(task) > 3:
+			# 		if task[2] not in dict_of_needed_items:
+			# 			dict_of_needed_items[task[2]] = task[3]
+			# 		else:
+			# 			dict_of_needed_items[task[2]] = dict_of_needed_items[task[2]] + task[3]
+			# total number of each item we should have at the end
+			# dict_of_used_items = {}
+			# for task in calling_stack:
+			# 	if len(task) > 3 and task[2] not in tools:
+			# 		if task[2] not in dict_of_used_items:
+			# 			dict_of_used_items[task[2]] = task[3]
+			# 		else:
+			# 			dict_of_used_items[task[2]] = dict_of_used_items[task[2]] + task[3]						
+			
+			# print("\n\nneed items (tasks): ", dict_of_needed_items.items(),"\n")
+			# print("used items (calling stack): ", dict_of_used_items.items(),"\n\n")
+
+			# # HOW MUCH WE ALREADY CONSUMED
+					# calculated what we consumed to get each item
+					# so, look at all the possible tools and items, check what's the recipe for them
+					# add the items consumed to the dict x the number of the items we have in the state
+						# so if rn we have none of the item, it wouldn't add anything
+			# items = data["Items"] + tools
+			# for item in items:
+			# 	if item not in dict_of_needed_items:
+			# 		dict_of_needed_items[item] = getattr(state, item)[ID]
+			# 	else:
+			# 		dict_of_needed_items[item] = dict_of_needed_items[item] + getattr(state, item)[ID]
+				
+			# 	recipes = data["Recipes"]
+			# 	r_name = ""
+			# 	print("currently looking at this item: ", item)
+			# 	for name in recipes:
+			# 		split_name = name.split(" ")
+			# 		# print(split_name)
+			# 		if "craft" in split_name[0] and item == split_name[1]:
+			# 			r_name = name
+			# 	if r_name != "":
+			# 		for i in range(0,getattr(state, item)[ID]):
+			# 			print("r_name is: ", r_name)
+			# 			for r in recipes[r_name]["Consumes"]:
+			# 				new_name = ""
+			# 				for name in recipes:
+			# 					split_name = name.split(" ")
+			# 					if "craft" in split_name[0] and r == split_name[1]:
+			# 						new_name = name
+			# 				if new_name != "":
+			# 					print("subtask: ", new_name)
+			# 					for c in recipes[new_name]["Consumes"]:
+			# 						# c = recipes[new_name]["Consumes"]
+			# 						print("sub item: ", r, "consumes: ", c, recipes[new_name]["Consumes"][c])
+			# 						if c not in dict_of_needed_items:
+			# 							dict_of_needed_items[c] = recipes[new_name]["Consumes"][c]
+			# 						else:
+			# 							dict_of_needed_items[c] = dict_of_needed_items[c] + recipes[new_name]["Consumes"][c]
+			# 				print("Item: ", item, "consumes: ", r, recipes[r_name]["Consumes"][r])
+			# 				if r not in dict_of_needed_items:
+			# 					dict_of_needed_items[r] = recipes[r_name]["Consumes"][r]
+			# 				else:
+			# 					dict_of_needed_items[r] = dict_of_needed_items[r] + recipes[r_name]["Consumes"][r]
+
+				
+
+			# for item in dict_of_used_items:
+			# 	print("item: ", item, dict_of_used_items.get(item,0),  " - ", dict_of_needed_items.get(item,0),)
+			# 	if dict_of_needed_items.get(item,0) < dict_of_used_items.get(item,0):
+			# 		return True
+
+			# Problem:
+					# when an item that is a dependency of one of the tasks is counted as fulfilled
+					# and then it is being used in a different task, so now it's impossible to make the original task
+			
+			# solve:
+					# have a dict[item] = how much is needed
+					# if the current task is 'have enough', add the amount to dict
+					# if it's produce, look at date to see what it takes and remove it from the dict
+					# if getattr is less than the amount in the dict, add a new task to make it
 
 		return False
 
@@ -215,7 +415,7 @@ if __name__ == '__main__':
 	with open(rules_filename) as f:
 		data = json.load(f)
 
-	state = set_up_state(data, 'agent', time=200) # allot time here
+	state = set_up_state(data, 'agent', time=100) # allot time here
 	goals = set_up_goals(data, 'agent')
 
 	declare_operators(data)
@@ -228,8 +428,8 @@ if __name__ == '__main__':
 	# Hint: verbose output can take a long time even if the solution is correct; 
 	# try verbose=1 if it is taking too long
 	
-	# pyhop.pyhop(state, [('have_enough', 'agent', 'wood', 4)], verbose=3)
-	pyhop.pyhop(state, [('have_enough', 'agent', 'plank', 1)], verbose=3)
+	pyhop.pyhop(state, [('have_enough', 'agent', 'iron_axe', 1)], verbose=3)
+	# pyhop.pyhop(state, [('have_enough', 'agent', 'iron_pickaxe', 1)], verbose=3)
 
 	# pyhop.pyhop(state, goals, verbose=3)
 	# pyhop.pyhop(state, [('have_enough', 'agent', 'cart', 1),('have_enough', 'agent', 'rail', 20)], verbose=3)
